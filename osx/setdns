@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+#
+# 221216
+# Tim Osburn <tim@osburn.com>
+# https://www.osburn.com/
+#
+
+#
+# Purpose of this program is to change the DNS settings on OSX after you get connected to the pritunl VPN
+# since when you connect to the pritunl VPN they force your DNS to 8.8.8.8, as I do not use that for DNS
+# as I do DNS filtering locally on a dnsmasq server on my local LAN at $DNSSVRADD
+#
+
+
+DNSSVRADD="192.168.0.15"
+
+
+#
+# Print out the system configuration dynamic store keys that are related with DNS
+#
+function listdnskeys
+{
+sudo /usr/sbin/scutil <<-EOF
+open
+list ".*DNS"
+quit
+EOF
+}
+
+
+#
+# Set the system configuration dynamic store keys that are related to DNS
+#
+function setdns
+{
+TEMPFILE=$(mktemp -ut tempfile)
+sudo /usr/sbin/scutil <<-EOF |
+open
+list ".*DNS"
+quit
+EOF
+grep '=' | sed 's/^.*= //' > ${TEMPFILE}
+
+for i in `cat ${TEMPFILE}`
+do
+echo "Setting key: ${i}"
+sudo /usr/sbin/scutil <<-EOF
+open
+d.remove SearchDomains
+d.remove ServerAddress
+d.add ServerAddresses * ${DNSSVRADD}
+set ${i}
+quit
+EOF
+done
+rm -f ${TEMPFILE}
+sudo killall -HUP mDNSResponder
+}
+
+
+#
+# View the values of the system configuration dynamic store keys that are related to DNS
+#
+function viewdns
+{
+TEMPFILE=$(mktemp -ut tempfile)
+sudo /usr/sbin/scutil <<-EOF |
+open
+list ".*DNS"
+quit
+EOF
+grep '=' | sed 's/^.*= //' > ${TEMPFILE}
+
+for i in `cat ${TEMPFILE}`
+do
+echo "${i}"
+sudo /usr/sbin/scutil <<-EOF
+open
+get ${i}
+d.show
+quit
+EOF
+done
+rm -f ${TEMPFILE}
+}
+
+
+#
+# Print out help menu
+#
+function usage
+{
+SCRIPT=$( basename "$0" )
+local txt=(
+"Utility $SCRIPT for setting DNS once connected to the Pritunl VPN."
+"Usage: $SCRIPT [options]"
+""
+"Options:"
+"  --help, -h     Print help."
+"  --viewdns, -v  Print DNS Settings."
+"  --listdns, -l   Print Keys that match DNS."
+"  --setdns, -s   Sets DNS Settings."
+)
+printf "%s\n" "${txt[@]}"
+}
+
+
+while (( $# ))
+do
+    case "$1" in
+
+        --help | -h)
+            usage
+            exit 0
+        ;;
+
+        --set | -s)
+            setdns
+            exit 0
+        ;;
+
+        --view | -v)
+            viewdns
+            exit 0
+        ;;
+
+        --list | -l)
+            listdnskeys
+            exit 0
+        ;;
+
+    esac
+done
