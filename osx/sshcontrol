@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+#
+# Manage SSH ControlMaster files
+#
+
+
+function listsshcontrolfiles
+{
+  cd $HOME/.ssh
+  for i in `ls $HOME/.ssh/control*`
+  do
+    ssh -S $i -O check XX
+  done
+  for i in `ls $HOME/.ssh/control*`
+  do
+    ls -la $i
+  done
+}
+
+
+function killsshcontrolfiles
+{
+  for i in `ls $HOME/.ssh/control*`
+  do
+    ssh -S $i -O exit XX
+  done
+}
+
+
+function showsshcontrolfiles
+{
+  for i in `ls $HOME/.ssh/control*`
+  do
+    SSHCONTROLPROCESS=$(ssh -S $i -O check XX 2>&1 >/dev/null | grep pid | sed "s/)//" | awk -F= '{print $2}' | sed "s/\r//")
+    SSHLIST="${SSHLIST} ${SSHCONTROLPROCESS}"
+  done
+  ps -p ${SSHLIST}
+}
+
+
+function usage
+{
+  SCRIPT=$( basename "$0" )
+  local txt=(
+    "Utility $SCRIPT for managing SSH control files."
+    "Usage: $SCRIPT [options]"
+    ""
+    "Options:"
+    "  --help, -h   Print help."
+    "  --list, -l   List all the control files."
+    "  --show, -s   Show all existing control processes."
+    "  --kill, -k   Kill all existing control sessions and removes control files."
+  )
+  printf "%s\n" "${txt[@]}"
+}
+
+
+shopt -s nullglob
+controlfiles=($HOME/.ssh/control*)
+if ! [[ ${#controlfiles[@]} -gt 0 ]]
+then
+  echo 'There are no SSH control files.'
+  exit
+fi
+
+while (( $# ))
+do
+  case "$1" in
+
+    --help | -h)
+      usage
+      exit 0
+      ;;
+
+    --kill | -k)
+      killsshcontrolfiles
+      exit 0
+      ;;
+
+    --list | -l)
+      listsshcontrolfiles
+      exit 0
+      ;;
+
+    --show | -s)
+      showsshcontrolfiles
+      exit 0
+      ;;
+
+  esac
+done
