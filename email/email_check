@@ -1,0 +1,80 @@
+#!/usr/bin/expect
+# 
+# Tim Osburn
+# 230703
+
+# use: ./email_check filelistofservers1perline
+
+set fromemail "user@domain.com"
+set rcptemail "user@domain.com"
+set sendinghost "host.domain.com"
+
+trap {
+ set rows [stty rows]
+ set cols [stty columns]
+ stty rows $rows columns $cols < $spawn_out(slave,name)
+} WINCH
+
+proc divmod {numerator divisor} {
+    list [expr {$numerator / $divisor}] [expr {$numerator % $divisor}]
+}
+
+lassign [divmod [clock milliseconds] 1000] sec milli
+set date [format {%s-%04d} [clock format $sec -format {%y%m%d-%H%M%S}] $milli]
+set serverlist [lindex $argv 0];
+set f [open $serverlist]
+set hosts [split [read -nonewline $f] "\n"]
+set iteration 1
+set timeout 20
+
+foreach host $hosts {
+  spawn telnet $host 25
+
+  expect "220 "
+  sleep 1
+  send "EHLO $sendinghost\r"
+
+  expect "250 "
+  sleep 1
+  send "MAIL FROM: $fromemail\r"
+
+  expect "250 "
+  sleep 1
+  send "RCPT TO: $rcptemail\r"
+
+  expect "250 "
+  sleep 1
+  send "DATA\r"
+
+  expect "354 "
+  sleep 1
+
+  lassign [divmod [clock milliseconds] 1000] sec milli
+  set messageid [format {%s-%04d} [clock format $sec -format {%y%m%d-%H%M%S}] $milli]
+  set emaildate [ exec /bin/date   "+%a, %d %b %Y %T %z"]
+
+  send "Message-ID: <$messageid-$iteration@$sendinghost>\r"
+  send "From: $fromemail\r"
+  send "To: $rcptemail\r"
+  puts "Date: $emaildate\r"
+  send "Subject: Automated Email test #$iteration using IPv4 to $host\r"
+  send "\r"
+  send "Interation number:\t$iteration\r"
+  send "\r"
+  send "To email:\t\t\t$rcptemail\r"
+  send "From email:\t\t$fromemail\r"
+  send "\r"
+  send "To host:\t\t\t$host\r"
+  send "Sent date:\t\t$messageid\r"
+  send "Series date:\t\t$date\r"
+  send "\r"
+  send "\r"
+  send ".\r"
+
+  expect "250 "
+  sleep 1
+  send "QUIT\r"
+
+  expect eof
+  set iteration [expr $iteration+1]
+}
